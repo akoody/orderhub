@@ -1,0 +1,27 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: orderhub
+      POSTGRES_PASSWORD: orderhub
+      POSTGRES_DB: orderhub
+    ports:
+      - "5432:5432"
+    volumes:
+      - orderhub_postgres:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+
+volumes:
+  orderhub_postgres:
