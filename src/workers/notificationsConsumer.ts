@@ -1,4 +1,8 @@
-import { connectRabbit, consumeJson, NOTIFICATIONS_QUEUE } from "../shared/queue/rabbit";
+import {
+  connectRabbit,
+  consumeJson,
+  NOTIFICATIONS_QUEUE
+} from "../shared/queue/rabbit";
 import { queueProcessedTotal } from "../shared/metrics/metrics";
 
 export async function startNotificationsConsumer() {
