@@ -2,7 +2,11 @@ import { PrismaClient, PaymentStatus, OutboxStatus } from "@prisma/client";
 
 export async function handlePaymentWebhook(
   prisma: PrismaClient,
-  input: { paymentId: string; status: "SUCCESS" | "FAILED"; providerRef?: string }
+  input: {
+    paymentId: string;
+    status: "SUCCESS" | "FAILED";
+    providerRef?: string;
+  }
 ) {
   return prisma.$transaction(async (tx) => {
     const payment = await tx.payment.findUnique({
@@ -71,6 +75,9 @@ export async function handlePaymentWebhook(
       }
     });
 
-    return { payment: { ...payment, status: PaymentStatus.SUCCESS }, processed: true };
+    return {
+      payment: { ...payment, status: PaymentStatus.SUCCESS },
+      processed: true
+    };
   });
 }

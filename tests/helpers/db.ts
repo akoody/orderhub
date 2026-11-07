@@ -1,5 +1,9 @@
 import "dotenv/config";
-import { prisma, connectPrisma, disconnectPrisma } from "../../src/shared/db/prisma";
+import {
+  prisma,
+  connectPrisma,
+  disconnectPrisma
+} from "../../src/shared/db/prisma";
 
 export async function setupDb() {
   await connectPrisma();

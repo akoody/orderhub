@@ -19,10 +19,7 @@ export async function createRefreshToken(
   });
 }
 
-export async function revokeRefreshToken(
-  prisma: PrismaClient,
-  token: string
-) {
+export async function revokeRefreshToken(prisma: PrismaClient, token: string) {
   const tokenHash = hashToken(token);
   return prisma.refreshToken.updateMany({
     where: { tokenHash, revokedAt: null },

@@ -1,5 +1,9 @@
 import { prisma, connectPrisma } from "../shared/db/prisma";
-import { connectRabbit, publishJson, NOTIFICATIONS_QUEUE } from "../shared/queue/rabbit";
+import {
+  connectRabbit,
+  publishJson,
+  NOTIFICATIONS_QUEUE
+} from "../shared/queue/rabbit";
 import { queueProcessedTotal } from "../shared/metrics/metrics";
 
 const intervalMs = Number(process.env.OUTBOX_INTERVAL_MS ?? 5000);
