@@ -17,7 +17,8 @@
 		"lint": "eslint .",
 		"format:check": "prettier --check src tests",
 		"db:generate": "prisma generate",
-		"db:migrate": "prisma migrate deploy"
+		"db:migrate": "prisma migrate deploy",
+		"admin:grant": "tsc && node dist/scripts/grantAdmin.js"
 	},
 	"dependencies": {
 		"@fastify/cookie": "^11.0.2",

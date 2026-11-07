@@ -6,6 +6,7 @@ import { ZodError } from "zod";
 import { authRoutes } from "./routes/auth";
 import { orderRoutes } from "./routes/orders";
 import { paymentRoutes } from "./routes/payments";
+import { type AppConfig, loadConfig } from "../shared/config/env";
 import { prisma } from "../shared/db/prisma";
 import { connectRedis } from "../shared/redis/redis";
 import { connectRabbit } from "../shared/queue/rabbit";
@@ -16,14 +17,15 @@ import {
   register
 } from "../shared/metrics/metrics";
 
-export function buildServer() {
+export function buildServer(config: AppConfig = loadConfig()) {
   const app = fastify({
     logger: true
   });
 
+  app.decorate("config", config);
   app.register(cookie);
   app.register(jwt, {
-    secret: process.env.JWT_SECRET ?? "dev-secret"
+    secret: config.JWT_SECRET
   });
   app.register(rateLimit, { global: false });
 
@@ -33,6 +35,14 @@ export function buildServer() {
     } catch (err) {
       reply.code(401);
       throw err;
+    }
+  });
+
+  // Роль берётся из подписанного access-токена, а не из заголовков клиента.
+  app.decorate("requireAdmin", async (request, reply) => {
+    await app.authenticate(request, reply);
+    if (request.user.role !== "ADMIN") {
+      return reply.code(403).send({ error: "admin only" });
     }
   });
 

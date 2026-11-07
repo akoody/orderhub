@@ -27,9 +27,24 @@ export async function revokeRefreshToken(prisma: PrismaClient, token: string) {
   });
 }
 
-export async function findRefreshToken(prisma: PrismaClient, token: string) {
+/**
+ * Атомарно гасит действующий refresh-токен и возвращает его владельца.
+ * Проверка и отзыв — один UPDATE, поэтому два параллельных запроса
+ * с одним токеном не получат по новой паре токенов.
+ */
+export async function consumeRefreshToken(prisma: PrismaClient, token: string) {
   const tokenHash = hashToken(token);
-  return prisma.refreshToken.findUnique({
-    where: { tokenHash }
+  const now = new Date();
+  const consumed = await prisma.refreshToken.updateMany({
+    where: { tokenHash, revokedAt: null, expiresAt: { gt: now } },
+    data: { revokedAt: now }
   });
+  if (consumed.count === 0) {
+    return null;
+  }
+  const record = await prisma.refreshToken.findUnique({
+    where: { tokenHash },
+    select: { user: { select: { id: true, role: true } } }
+  });
+  return record?.user ?? null;
 }
