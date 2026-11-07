@@ -1,19 +1,25 @@
-import amqp, { type Channel, type Connection, type ConsumeMessage } from "amqplib";
+import amqp, {
+  type Channel,
+  type ChannelModel,
+  type ConsumeMessage
+} from "amqplib";
 
 export const NOTIFICATIONS_QUEUE = "notifications";
 
-let connection: Connection | null = null;
+let connection: ChannelModel | null = null;
 let channel: Channel | null = null;
 
-export async function connectRabbit() {
-  if (!connection) {
+export async function connectRabbit(): Promise<Channel> {
+  if (!connection || !channel) {
     const url = process.env.RABBIT_URL ?? "amqp://localhost:5672";
-    connection = await amqp.connect(url);
-    channel = await connection.createChannel();
-    await channel.assertQueue(NOTIFICATIONS_QUEUE, { durable: true });
+    const conn = await amqp.connect(url);
+    const ch = await conn.createChannel();
+    await ch.assertQueue(NOTIFICATIONS_QUEUE, { durable: true });
+    connection = conn;
+    channel = ch;
   }
 
-  return channel as Channel;
+  return channel;
 }
 
 export async function publishJson(queue: string, payload: unknown) {
