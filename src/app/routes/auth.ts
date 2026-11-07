@@ -1,56 +1,65 @@
-import { type FastifyInstance } from "fastify";
+import { type FastifyInstance, type FastifyReply } from "fastify";
+import { type Role } from "@prisma/client";
 import { z } from "zod";
 import crypto from "crypto";
 import { prisma } from "../../shared/db/prisma";
 import { registerUser } from "../../modules/auth/usecases/registerUser";
 import { verifyCredentials } from "../../modules/auth/usecases/verifyCredentials";
 import {
+  consumeRefreshToken,
   createRefreshToken,
-  findRefreshToken,
   revokeRefreshToken
 } from "../../modules/auth/usecases/refreshTokens";
 
-const refreshCookie = {
-  name: "refresh_token",
-  options: {
-    httpOnly: true,
-    sameSite: "lax" as const,
-    secure: false,
-    path: "/",
-    maxAge: 60 * 60 * 24 * 7
-  }
-};
+const REFRESH_COOKIE = "refresh_token";
+const REFRESH_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
-function issueAccessToken(app: FastifyInstance, userId: string) {
-  return app.jwt.sign({ sub: userId }, { expiresIn: "15m" });
-}
-
-function issueRefreshToken() {
-  return crypto.randomUUID();
-}
+const credentialsSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(8)
+});
 
 export async function authRoutes(app: FastifyInstance) {
-  app.post("/auth/register", async (request, reply) => {
-    const bodySchema = z.object({
-      email: z.string().email(),
-      password: z.string().min(8)
-    });
+  const cookieOptions = {
+    httpOnly: true,
+    sameSite: "lax" as const,
+    secure: app.config.COOKIE_SECURE,
+    path: "/",
+    maxAge: REFRESH_TTL_MS / 1000
+  };
 
-    const body = bodySchema.parse(request.body);
-    const user = await registerUser(prisma, body);
-
-    const refreshToken = issueRefreshToken();
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  /** Выдаёт access-токен с ролью и новый refresh-токен в httpOnly cookie. */
+  async function issueTokens(
+    reply: FastifyReply,
+    user: { id: string; role: Role }
+  ) {
+    const refreshToken = crypto.randomUUID();
     await createRefreshToken(prisma, {
       userId: user.id,
       token: refreshToken,
-      expiresAt
+      expiresAt: new Date(Date.now() + REFRESH_TTL_MS)
     });
+    reply.setCookie(REFRESH_COOKIE, refreshToken, cookieOptions);
+    return {
+      accessToken: app.jwt.sign(
+        { sub: user.id, role: user.role },
+        { expiresIn: "15m" }
+      )
+    };
+  }
 
-    const accessToken = issueAccessToken(app, user.id);
-    reply.setCookie(refreshCookie.name, refreshToken, refreshCookie.options);
-
-    return { accessToken };
+  app.post("/auth/register", async (request, reply) => {
+    const body = credentialsSchema.parse(request.body);
+    try {
+      const user = await registerUser(prisma, body);
+      return await issueTokens(reply, user);
+    } catch (err) {
+      if (err instanceof Error && err.message === "EMAIL_TAKEN") {
+        reply.code(409);
+        return { error: "email already registered" };
+      }
+      throw err;
+    }
   });
 
   app.post(
@@ -64,76 +73,47 @@ export async function authRoutes(app: FastifyInstance) {
       }
     },
     async (request, reply) => {
-      const bodySchema = z.object({
-        email: z.string().email(),
-        password: z.string().min(8)
-      });
-
-      const body = bodySchema.parse(request.body);
+      const body = credentialsSchema.parse(request.body);
 
       let user;
       try {
         user = await verifyCredentials(prisma, body);
-      } catch (err) {
+      } catch {
         reply.code(401);
         return { error: "invalid credentials" };
       }
 
-      const refreshToken = issueRefreshToken();
-      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-      await createRefreshToken(prisma, {
-        userId: user.id,
-        token: refreshToken,
-        expiresAt
-      });
-
-      const accessToken = issueAccessToken(app, user.id);
-      reply.setCookie(refreshCookie.name, refreshToken, refreshCookie.options);
-
-      return { accessToken };
+      return issueTokens(reply, user);
     }
   );
 
   app.post("/auth/refresh", async (request, reply) => {
-    const token = request.cookies[refreshCookie.name];
+    const token = request.cookies[REFRESH_COOKIE];
     if (!token) {
       reply.code(401);
       return { error: "missing refresh token" };
     }
 
-    const record = await findRefreshToken(prisma, token);
-    if (!record || record.revokedAt || record.expiresAt < new Date()) {
+    const user = await consumeRefreshToken(prisma, token);
+    if (!user) {
       reply.code(401);
       return { error: "refresh token invalid" };
     }
 
-    await revokeRefreshToken(prisma, token);
-
-    const newRefreshToken = issueRefreshToken();
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-    await createRefreshToken(prisma, {
-      userId: record.userId,
-      token: newRefreshToken,
-      expiresAt
-    });
-
-    const accessToken = issueAccessToken(app, record.userId);
-    reply.setCookie(refreshCookie.name, newRefreshToken, refreshCookie.options);
-
-    return { accessToken };
+    return issueTokens(reply, user);
   });
 
   app.post("/auth/logout", async (request, reply) => {
-    const token = request.cookies[refreshCookie.name];
+    const token = request.cookies[REFRESH_COOKIE];
     if (token) {
       await revokeRefreshToken(prisma, token);
     }
 
-    reply.clearCookie(refreshCookie.name, refreshCookie.options);
+    reply.clearCookie(REFRESH_COOKIE, cookieOptions);
     return { ok: true };
   });
 
   app.get("/me", { preHandler: app.authenticate }, async (request) => {
-    return { userId: request.user.sub };
+    return { userId: request.user.sub, role: request.user.role };
   });
 }

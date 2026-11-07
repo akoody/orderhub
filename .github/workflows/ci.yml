@@ -26,6 +26,7 @@ jobs:
     env:
       DATABASE_URL: postgresql://orderhub:orderhub@localhost:5432/orderhub
       JWT_SECRET: ci-only-secret-0123456789abcdef0123456789
+      PAYMENT_WEBHOOK_SECRET: ci-only-webhook-secret-0123456789abcdef
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

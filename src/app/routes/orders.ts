@@ -33,49 +33,47 @@ export async function orderRoutes(app: FastifyInstance) {
     return { orders };
   });
 
-  app.patch("/admin/orders/:id/status", async (request, reply) => {
-    const adminHeader = request.headers["x-admin"];
-    if (adminHeader !== "true") {
-      reply.code(403);
-      return { error: "admin only" };
-    }
-
-    const versionHeader = request.headers["x-order-version"];
-    const expectedVersion = Number(versionHeader);
-    if (!versionHeader || Number.isNaN(expectedVersion)) {
-      reply.code(400);
-      return { error: "missing order version" };
-    }
-
-    const paramsSchema = z.object({
-      id: z.string().uuid()
-    });
-    const bodySchema = z.object({
-      status: z.nativeEnum(OrderStatus)
-    });
-
-    const params = paramsSchema.parse(request.params);
-    const body = bodySchema.parse(request.body);
-
-    let order;
-    try {
-      order = await changeOrderStatus(prisma, {
-        orderId: params.id,
-        status: body.status,
-        expectedVersion
-      });
-    } catch (err) {
-      if (err instanceof Error && err.message === "VERSION_MISMATCH") {
-        reply.code(409);
-        return { error: "version mismatch" };
+  app.patch(
+    "/admin/orders/:id/status",
+    { preHandler: app.requireAdmin },
+    async (request, reply) => {
+      const versionHeader = request.headers["x-order-version"];
+      const expectedVersion = Number(versionHeader);
+      if (!versionHeader || Number.isNaN(expectedVersion)) {
+        reply.code(400);
+        return { error: "missing order version" };
       }
-      throw err;
-    }
 
-    return {
-      orderId: order?.id,
-      status: order?.status,
-      version: order?.version
-    };
-  });
+      const paramsSchema = z.object({
+        id: z.string().uuid()
+      });
+      const bodySchema = z.object({
+        status: z.nativeEnum(OrderStatus)
+      });
+
+      const params = paramsSchema.parse(request.params);
+      const body = bodySchema.parse(request.body);
+
+      let order;
+      try {
+        order = await changeOrderStatus(prisma, {
+          orderId: params.id,
+          status: body.status,
+          expectedVersion
+        });
+      } catch (err) {
+        if (err instanceof Error && err.message === "VERSION_MISMATCH") {
+          reply.code(409);
+          return { error: "version mismatch" };
+        }
+        throw err;
+      }
+
+      return {
+        orderId: order?.id,
+        status: order?.status,
+        version: order?.version
+      };
+    }
+  );
 }
