@@ -7,8 +7,14 @@ import { queueProcessedTotal } from "../shared/metrics/metrics";
 
 export async function startNotificationsConsumer() {
   await connectRabbit();
-  await consumeJson(NOTIFICATIONS_QUEUE, async (payload) => {
-    console.log("sent notification", payload);
+  // Доставка «хотя бы один раз»: реальный отправитель должен отбрасывать
+  // повторы по message.properties.messageId (id события outbox).
+  await consumeJson(NOTIFICATIONS_QUEUE, async (payload, message) => {
+    console.log("sent notification", {
+      eventId: message.properties.messageId,
+      type: message.properties.type,
+      payload
+    });
     queueProcessedTotal.inc({ queue: NOTIFICATIONS_QUEUE });
   });
 

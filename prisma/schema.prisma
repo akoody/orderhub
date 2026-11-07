@@ -87,11 +87,14 @@ model OutboxEvent {
   id        String       @id @default(uuid())
   type      String
   payload   Json
-  status    OutboxStatus @default(NEW)
-  createdAt DateTime     @default(now())
-  updatedAt DateTime     @updatedAt
-  sentAt    DateTime?
+  status        OutboxStatus @default(NEW)
+  attempts      Int          @default(0)
+  nextAttemptAt DateTime     @default(now())
+  lastError     String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  sentAt        DateTime?
 
-  @@index([status])
+  @@index([status, nextAttemptAt])
   @@index([createdAt])
 }

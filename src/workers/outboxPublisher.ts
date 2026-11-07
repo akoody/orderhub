@@ -5,6 +5,7 @@ import {
   NOTIFICATIONS_QUEUE
 } from "../shared/queue/rabbit";
 import { queueProcessedTotal } from "../shared/metrics/metrics";
+import { processOutboxBatch } from "../modules/outbox/usecases/processOutboxBatch";
 
 const intervalMs = Number(process.env.OUTBOX_INTERVAL_MS ?? 5000);
 
@@ -18,27 +19,19 @@ export function startOutboxPublisher() {
 
     running = true;
     try {
-      const events = await prisma.outboxEvent.findMany({
-        where: { status: "NEW" },
-        orderBy: { createdAt: "asc" },
-        take: 100
+      const result = await processOutboxBatch(prisma, async (message) => {
+        // messageId = id события: по нему получатель отбрасывает повторы.
+        await publishJson(NOTIFICATIONS_QUEUE, message.payload, {
+          messageId: message.id,
+          type: message.type
+        });
+        queueProcessedTotal.inc({ queue: NOTIFICATIONS_QUEUE });
       });
-
-      for (const event of events) {
-        try {
-          await publishJson(NOTIFICATIONS_QUEUE, event.payload);
-          queueProcessedTotal.inc({ queue: NOTIFICATIONS_QUEUE });
-          await prisma.outboxEvent.update({
-            where: { id: event.id },
-            data: { status: "SENT", sentAt: new Date() }
-          });
-        } catch (err) {
-          await prisma.outboxEvent.update({
-            where: { id: event.id },
-            data: { status: "ERROR" }
-          });
-        }
+      if (result.retried || result.failed) {
+        console.warn("outbox batch had failures", result);
       }
+    } catch (err) {
+      console.error("outbox batch failed", err);
     } finally {
       running = false;
     }
