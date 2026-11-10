@@ -10,8 +10,8 @@ Payment creation and provider webhooks can be retried. Without idempotency, retr
 
 ## Decision
 Use a unique constraint on `Payment.idempotencyKey` for create. Before creating, and again on a unique-constraint conflict, look the key up:
-- same key, same order, same user — return the existing payment (a retry);
-- same key used for a different order or by a different user — reject with `422`, never return the stored payment.
+- same key, same order, same user: return the existing payment (a retry);
+- same key used for a different order or by a different user: reject with `422`, never return the stored payment.
 
 Webhook handler is idempotent and only transitions `PENDING -> SUCCESS/FAILED` once. If a webhook arrives multiple times, no duplicate state changes are applied. Webhooks must carry `X-Webhook-Signature: sha256=<HMAC of the raw body>` with `PAYMENT_WEBHOOK_SECRET`; unsigned or forged requests get `401` before any state is read.
 
