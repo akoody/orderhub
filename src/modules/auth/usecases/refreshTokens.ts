@@ -29,7 +29,7 @@ export async function revokeRefreshToken(prisma: PrismaClient, token: string) {
 
 /**
  * Атомарно гасит действующий refresh-токен и возвращает его владельца.
- * Проверка и отзыв — один UPDATE, поэтому два параллельных запроса
+ * Проверка и отзыв делаются одним UPDATE, поэтому два параллельных запроса
  * с одним токеном не получат по новой паре токенов.
  */
 export async function consumeRefreshToken(prisma: PrismaClient, token: string) {

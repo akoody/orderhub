@@ -9,7 +9,7 @@ const envSchema = z.object({
   JWT_SECRET: secret("JWT_SECRET"),
   /** Общий секрет с платёжным провайдером для подписи вебхуков. */
   PAYMENT_WEBHOOK_SECRET: secret("PAYMENT_WEBHOOK_SECRET"),
-  /** Маршрут /provider/mock/pay — только для разработки и тестов. */
+  /** Маршрут /provider/mock/pay: только для разработки и тестов. */
   MOCK_PROVIDER_ENABLED: z
     .enum(["true", "false"])
     .default("false")
